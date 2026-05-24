@@ -2,7 +2,7 @@
   "name": "task-manager",
   "version": "1.0.0",
   "private": true,
-  "homepage":"https://koba220.github.io/task-manager",
+  "homepage": "https://koba220.github.io/task-manager",
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -13,6 +13,9 @@
     "deploy": "gh-pages -d build",
     "start": "react-scripts start",
     "build": "react-scripts build"
+  },
+  "devDependencies": {
+    "gh-pages": "^6.0.0"
   },
   "browserslist": {
     "production": [">0.2%", "not dead"],
