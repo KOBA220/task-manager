@@ -5,42 +5,58 @@ import TaskModal from './components/TaskModal';
 import BulkMemoModal from './components/BulkMemoModal';
 import Calendar from './components/Calendar';
 import DayTasksModal from './components/DayTasksModal';
-import { isOverdue, isDueSoon, PRIORITY_ORDER, formatDate } from './utils/helpers';
+import { formatDateTime, getTaskEnd, getTaskStatus, STATUS_META, PRIORITY_ORDER, projectColor } from './utils/helpers';
 
 export default function App() {
   const { tasks, addTask, updateTask, deleteTask, toggleComplete, bulkMemo, bulkComplete } = useTasks();
 
-  const [tab, setTab] = useState('active');
+  const [tab, setTab] = useState('inProgress');
   const [showModal, setShowModal] = useState(false);
   const [editTask, setEditTask] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
   const [showBulkMemo, setShowBulkMemo] = useState(false);
   const [sortBy, setSortBy] = useState('created');
   const [filterPriority, setFilterPriority] = useState('all');
+  const [filterProject, setFilterProject] = useState('all');
   const [search, setSearch] = useState('');
   const [calDay, setCalDay] = useState(null);
 
-  const activeTasks = tasks.filter((t) => !t.completed);
-  const completedTasks = tasks.filter((t) => t.completed);
-  const overdueTasks = activeTasks.filter((t) => isOverdue(t.dueDate));
+  const statusTasks = useMemo(() => ({
+    inProgress: tasks.filter((task) => getTaskStatus(task) === 'inProgress'),
+    overdue: tasks.filter((task) => getTaskStatus(task) === 'overdue'),
+    completed: tasks.filter((task) => getTaskStatus(task) === 'completed'),
+    upcoming: tasks.filter((task) => getTaskStatus(task) === 'upcoming'),
+  }), [tasks]);
 
-  const filteredActive = useMemo(() => {
-    let list = activeTasks;
+  const projects = useMemo(() => [...new Set(tasks.map((task) => task.project || '未分類'))].sort(), [tasks]);
+
+  const filteredTasks = useMemo(() => {
+    let list = statusTasks[tab] || [];
     if (filterPriority !== 'all') list = list.filter((t) => t.priority === filterPriority);
-    if (search) list = list.filter((t) => t.title.toLowerCase().includes(search.toLowerCase()) || (t.memo || '').toLowerCase().includes(search.toLowerCase()));
+    if (filterProject !== 'all') list = list.filter((t) => (t.project || '未分類') === filterProject);
+    if (search) list = list.filter((t) => t.title.toLowerCase().includes(search.toLowerCase()) || (t.memo || '').toLowerCase().includes(search.toLowerCase()) || (t.project || '未分類').toLowerCase().includes(search.toLowerCase()));
     if (sortBy === 'priority') list = [...list].sort((a, b) => PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority));
-    else if (sortBy === 'dueDate') list = [...list].sort((a, b) => {
-      if (!a.dueDate && !b.dueDate) return 0;
-      if (!a.dueDate) return 1; if (!b.dueDate) return -1;
-      return new Date(a.dueDate) - new Date(b.dueDate);
+    else if (sortBy === 'schedule') list = [...list].sort((a, b) => {
+      const aDate = a.startAt || getTaskEnd(a);
+      const bDate = b.startAt || getTaskEnd(b);
+      if (!aDate && !bDate) return 0;
+      if (!aDate) return 1; if (!bDate) return -1;
+      return new Date(aDate) - new Date(bDate);
     });
     else list = [...list].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     return list;
-  }, [tasks, filterPriority, search, sortBy]);
+  }, [statusTasks, tab, filterPriority, filterProject, search, sortBy]);
 
-  const upcomingTasks = activeTasks
-    .filter((t) => t.dueDate)
-    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
+  const groupedTasks = useMemo(() => filteredTasks.reduce((groups, task) => {
+    const project = task.project || '未分類';
+    if (!groups[project]) groups[project] = [];
+    groups[project].push(task);
+    return groups;
+  }, {}), [filteredTasks]);
+
+  const upcomingTasks = tasks
+    .filter((t) => !t.completed && getTaskEnd(t))
+    .sort((a, b) => new Date(getTaskEnd(a)) - new Date(getTaskEnd(b)))
     .slice(0, 6);
 
   const handleSave = (task) => {
@@ -51,7 +67,7 @@ export default function App() {
 
   const handleEdit = (task) => { setEditTask(task); setShowModal(true); };
   const handleSelect = (id) => setSelectedIds((prev) => prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]);
-  const selectAll = () => setSelectedIds(filteredActive.map((t) => t.id));
+  const selectAll = () => setSelectedIds(filteredTasks.map((t) => t.id));
   const clearSelect = () => setSelectedIds([]);
 
   const handleBulkMemo = (memo, append) => { bulkMemo(selectedIds, memo, append); setShowBulkMemo(false); clearSelect(); };
@@ -59,7 +75,7 @@ export default function App() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 20px', display: 'grid', gridTemplateColumns: '1fr 280px', gap: 20, alignItems: 'start' }}>
+      <div className="app-layout">
 
         {/* ── Main ── */}
         <div>
@@ -82,35 +98,29 @@ export default function App() {
           </div>
 
           {/* Stats */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 20 }}>
-            {[
-              { label: '進行中', val: activeTasks.length, color: 'var(--accent)' },
-              { label: '期限切れ', val: overdueTasks.length, color: 'var(--danger)' },
-              { label: '完了済み', val: completedTasks.length, color: 'var(--success)' },
-            ].map((s) => (
-              <div key={s.label} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '12px 16px' }}>
-                <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{s.label}</div>
-                <div style={{ fontSize: 26, fontWeight: 700, color: s.color, marginTop: 4 }}>{s.val}</div>
-              </div>
+          <div className="stats-grid">
+            {Object.entries(STATUS_META).map(([key, meta]) => (
+              <button key={key} onClick={() => { setTab(key); clearSelect(); }} style={{ textAlign: 'left', background: tab === key ? 'var(--accent-light)' : 'var(--surface)', border: `1px solid ${tab === key ? 'var(--accent-mid)' : 'var(--border)'}`, borderRadius: 'var(--radius-md)', padding: '12px 16px', cursor: 'pointer' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text3)', fontWeight: 700 }}><i className={`ti ${meta.icon}`} />{meta.label}</div>
+                <div style={{ fontSize: 26, fontWeight: 700, color: meta.color, marginTop: 4 }}>{statusTasks[key].length}</div>
+              </button>
             ))}
           </div>
 
           {/* Tabs */}
-          <div style={{ display: 'flex', borderBottom: '2px solid var(--border)', marginBottom: 14 }}>
-            {[['active', `進行中 (${activeTasks.length})`], ['completed', `完了 (${completedTasks.length})`]].map(([key, label]) => (
+          <div style={{ display: 'flex', borderBottom: '2px solid var(--border)', marginBottom: 14, overflowX: 'auto' }}>
+            {Object.entries(STATUS_META).map(([key, meta]) => (
               <button
                 key={key}
                 onClick={() => { setTab(key); clearSelect(); }}
                 style={{ padding: '10px 18px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: tab === key ? 'var(--accent)' : 'var(--text3)', borderBottom: tab === key ? '2px solid var(--accent)' : '2px solid transparent', marginBottom: -2, transition: 'color 0.15s' }}
               >
-                {label}
+                {meta.label} ({statusTasks[key].length})
               </button>
             ))}
           </div>
 
-          {tab === 'active' && (
-            <>
-              {/* Controls */}
+          <>
               <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
                 <div style={{ position: 'relative', flex: 1, minWidth: 140 }}>
                   <i className="ti ti-search" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)', fontSize: 14 }} />
@@ -124,7 +134,8 @@ export default function App() {
                 </div>
                 {[
                   ['filterPriority', filterPriority, setFilterPriority, [['all', '全優先度'], ['high', '高'], ['medium', '中'], ['low', '低'], ['none', 'なし']]],
-                  ['sortBy', sortBy, setSortBy, [['created', '追加順'], ['priority', '優先度順'], ['dueDate', '期限順']]],
+                  ['filterProject', filterProject, setFilterProject, [['all', '全案件'], ...projects.map((project) => [project, project])]],
+                  ['sortBy', sortBy, setSortBy, [['created', '追加順'], ['priority', '優先度順'], ['schedule', '日程順']]],
                 ].map(([name, val, setter, opts]) => (
                   <select
                     key={name} value={val} onChange={(e) => setter(e.target.value)}
@@ -138,7 +149,7 @@ export default function App() {
               </div>
 
               {/* Bulk action bar */}
-              {selectedIds.length > 0 ? (
+              {tab !== 'completed' && (selectedIds.length > 0 ? (
                 <div style={{ background: 'var(--accent-light)', border: '1px solid var(--accent-mid)', borderRadius: 'var(--radius-sm)', padding: '8px 14px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)' }}>{selectedIds.length} 件選択中</span>
                   <GhostBtn icon="ti-notes" label="まとめてメモ" onClick={() => setShowBulkMemo(true)} />
@@ -146,47 +157,38 @@ export default function App() {
                   <GhostBtn icon="ti-x" label="選択解除" onClick={clearSelect} />
                   <button onClick={selectAll} style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>全選択</button>
                 </div>
-              ) : filteredActive.length > 0 && (
+              ) : filteredTasks.length > 0 && (
                 <div style={{ textAlign: 'right', marginBottom: 8 }}>
                   <button onClick={selectAll} style={{ fontSize: 11, color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer' }}>全選択</button>
                 </div>
-              )}
+              ))}
 
-              {filteredActive.length === 0 ? (
+              {filteredTasks.length === 0 ? (
                 <EmptyState icon="ti-check" text={search ? '検索結果がありません' : 'タスクがありません'} />
               ) : (
-                filteredActive.map((task) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    onEdit={handleEdit}
-                    onToggleComplete={toggleComplete}
-                    onDelete={deleteTask}
-                    isSelected={selectedIds.includes(task.id)}
-                    onSelect={handleSelect}
-                  />
+                Object.entries(groupedTasks).map(([project, projectTasks]) => (
+                  <section key={project} style={{ marginBottom: 20 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '12px 2px 8px' }}>
+                      <span style={{ width: 9, height: 9, borderRadius: '50%', background: projectColor(project) }} />
+                      <h2 style={{ fontSize: 14, fontWeight: 700 }}>{project}</h2>
+                      <span style={{ fontSize: 11, color: 'var(--text3)' }}>{projectTasks.length}件</span>
+                    </div>
+                    {projectTasks.map((task) => (
+                      <TaskCard
+                        key={task.id}
+                        task={task}
+                        onEdit={handleEdit}
+                        onToggleComplete={toggleComplete}
+                        onDelete={deleteTask}
+                        isSelected={selectedIds.includes(task.id)}
+                        selectable={tab !== 'completed'}
+                        onSelect={tab === 'completed' ? () => {} : handleSelect}
+                      />
+                    ))}
+                  </section>
                 ))
               )}
-            </>
-          )}
-
-          {tab === 'completed' && (
-            completedTasks.length === 0 ? (
-              <EmptyState icon="ti-trophy" text="完了したタスクはありません" />
-            ) : (
-              completedTasks.map((task) => (
-                <TaskCard
-                  key={task.id}
-                  task={task}
-                  onEdit={handleEdit}
-                  onToggleComplete={toggleComplete}
-                  onDelete={deleteTask}
-                  isSelected={false}
-                  onSelect={() => {}}
-                />
-              ))
-            )
-          )}
+          </>
         </div>
 
         {/* ── Sidebar ── */}
@@ -197,15 +199,18 @@ export default function App() {
           </SideCard>
 
           {/* Upcoming */}
-          <SideCard title="直近の期限" icon="ti-clock">
+          <SideCard title="直近の終了予定" icon="ti-clock">
             {upcomingTasks.length === 0 ? (
               <p style={{ fontSize: 12, color: 'var(--text3)' }}>期限付きタスクなし</p>
             ) : (
               upcomingTasks.map((t) => (
                 <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--border)', gap: 8 }}>
-                  <span style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{t.title}</span>
-                  <span style={{ fontSize: 11, whiteSpace: 'nowrap', color: isOverdue(t.dueDate) ? 'var(--danger)' : isDueSoon(t.dueDate) ? 'var(--warn)' : 'var(--text3)' }}>
-                    {formatDate(t.dueDate)}
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <span style={{ display: 'block', fontSize: 10, color: projectColor(t.project || '未分類'), fontWeight: 700 }}>{t.project || '未分類'}</span>
+                    <span style={{ display: 'block', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
+                  </div>
+                  <span style={{ fontSize: 10, whiteSpace: 'nowrap', color: getTaskStatus(t) === 'overdue' ? 'var(--danger)' : 'var(--text3)' }}>
+                    {formatDateTime(getTaskEnd(t))}
                   </span>
                 </div>
               ))
@@ -215,7 +220,7 @@ export default function App() {
       </div>
 
       {/* Modals */}
-      {showModal && <TaskModal task={editTask} onSave={handleSave} onClose={() => { setShowModal(false); setEditTask(null); }} />}
+      {showModal && <TaskModal task={editTask} projects={projects} onSave={handleSave} onClose={() => { setShowModal(false); setEditTask(null); }} />}
       {showBulkMemo && <BulkMemoModal count={selectedIds.length} onSave={handleBulkMemo} onClose={() => setShowBulkMemo(false)} />}
       {calDay && <DayTasksModal tasks={calDay.tasks} dateStr={calDay.dateStr} onClose={() => setCalDay(null)} />}
     </div>

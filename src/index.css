@@ -43,3 +43,30 @@ input, textarea, select, button { font-family: var(--font); }
 ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 99px; }
 
 ::selection { background: var(--accent-light); }
+
+.app-layout {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 24px 20px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  gap: 20px;
+  align-items: start;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 900px) {
+  .app-layout { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 600px) {
+  .app-layout { padding: 16px 12px; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  input[type='datetime-local'] { font-size: 12px; }
+}

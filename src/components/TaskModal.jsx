@@ -8,11 +8,12 @@ const inputStyle = {
 };
 const labelStyle = { fontSize: 11, fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5, display: 'block' };
 
-export default function TaskModal({ task, onSave, onClose }) {
+export default function TaskModal({ task, projects = [], onSave, onClose }) {
   const [form, setForm] = useState(() => task || {
-    title: '', priority: 'none', dueDate: '', memo: '', notes: [], checkedNoteIds: [],
+    title: '', project: '', priority: 'none', startAt: '', endAt: '', dueDate: '', memo: '', notes: [], checkedNoteIds: [],
   });
   const [newNote, setNewNote] = useState('');
+  const [dateError, setDateError] = useState('');
   const titleRef = useRef();
 
   useEffect(() => { setTimeout(() => titleRef.current?.focus(), 50); }, []);
@@ -34,7 +35,18 @@ export default function TaskModal({ task, onSave, onClose }) {
 
   const handleSave = () => {
     if (!form.title.trim()) { titleRef.current?.focus(); return; }
-    onSave({ ...form, id: form.id || generateId(), completed: form.completed || false });
+    if (form.startAt && form.endAt && new Date(form.startAt) > new Date(form.endAt)) {
+      setDateError('終了日時は開始日時より後にしてください。');
+      return;
+    }
+    const dueDate = form.endAt ? form.endAt.slice(0, 10) : (form.dueDate || '');
+    onSave({
+      ...form,
+      project: form.project.trim() || '未分類',
+      dueDate,
+      id: form.id || generateId(),
+      completed: form.completed || false,
+    });
   };
 
   const handleKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -82,8 +94,22 @@ export default function TaskModal({ task, onSave, onClose }) {
             />
           </div>
 
-          {/* Priority + DueDate */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div>
+            <label style={labelStyle}>案件名</label>
+            <input
+              list="project-options"
+              value={form.project || ''}
+              onChange={(e) => set('project', e.target.value)}
+              placeholder="例：Webサイトリニューアル"
+              style={inputStyle}
+            />
+            <datalist id="project-options">
+              {projects.map((project) => <option key={project} value={project} />)}
+            </datalist>
+          </div>
+
+          {/* Priority */}
+          <div>
             <div>
               <label style={labelStyle}>優先度</label>
               <select
@@ -96,17 +122,35 @@ export default function TaskModal({ task, onSave, onClose }) {
                 {PRIORITY_ORDER.map((p) => <option key={p} value={p}>{PRIORITIES[p]}</option>)}
               </select>
             </div>
+          </div>
+
+          {/* Schedule */}
+          <div style={{ background: 'var(--surface2)', borderRadius: 'var(--radius-md)', padding: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, color: 'var(--text2)', fontSize: 12, fontWeight: 600 }}>
+              <i className="ti ti-calendar-time" /> 実施期間
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
-              <label style={labelStyle}>期限</label>
+              <label style={labelStyle}>開始日時</label>
               <input
-                type="date"
-                value={form.dueDate || ''}
-                onChange={(e) => set('dueDate', e.target.value)}
+                type="datetime-local"
+                value={form.startAt || ''}
+                onChange={(e) => { set('startAt', e.target.value); setDateError(''); }}
                 style={inputStyle}
-                onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
-                onBlur={(e) => (e.target.style.borderColor = 'var(--border)')}
               />
             </div>
+            <div>
+              <label style={labelStyle}>終了日時</label>
+              <input
+                type="datetime-local"
+                min={form.startAt || undefined}
+                value={form.endAt || ''}
+                onChange={(e) => { set('endAt', e.target.value); setDateError(''); }}
+                style={inputStyle}
+              />
+            </div>
+            </div>
+            {dateError && <p style={{ color: 'var(--danger)', fontSize: 11, marginTop: 8 }}>{dateError}</p>}
           </div>
 
           {/* Memo */}

@@ -1,49 +1,39 @@
-# タスク管理システム
+# タスク管理アプリ
 
-React 製のタスク管理アプリです。
+案件ごとにタスクを管理できるReact製Webアプリです。データはブラウザのローカルストレージに保存されます。
 
-## 機能
+## 主な機能
 
-- タスクカードの追加・編集・削除
-- 優先度（高 / 中 / 低 / なし）の設定
-- 期限の設定（期限切れ・もうすぐ期限の視覚的警告）
-- カレンダー表示（タスクが紐づいた日を色付き表示）
-- 各タスクのメモ機能
-- チェックボックス付きのチェックリスト
-- 複数タスクを選択してメモを一括入力（追記 / 上書き）
-- 完了タブ（完了したタスクを分けて表示）
-- フィルター・並び替え・検索
-- ローカルストレージへの自動保存
+- 「進行中」「期限切れ」「完了」「これから」の4状態で管理
+- 案件ごとのタスク整理と絞り込み
+- 開始日時・終了日時の登録
+- カレンダー上でタスクの実施期間を表示
+- 優先度、検索、並び替え、チェックリスト、メモ
+- 複数タスクの一括完了・一括メモ
 
-## ファイル構成
-
-```
-task-manager/
-├── public/
-│   └── index.html          # HTMLテンプレート
-├── src/
-│   ├── index.js            # エントリーポイント
-│   ├── index.css           # グローバルスタイル・CSS変数
-│   ├── App.jsx             # メインアプリ（状態管理・レイアウト）
-│   ├── hooks/
-│   │   └── useTasks.js     # タスクCRUD + localStorage保存
-│   ├── utils/
-│   │   └── helpers.js      # 日付処理・定数・初期データ
-│   └── components/
-│       ├── TaskCard.jsx     # タスクカード1件
-│       ├── TaskModal.jsx    # タスク追加・編集モーダル
-│       ├── BulkMemoModal.jsx  # まとめてメモモーダル
-│       ├── Calendar.jsx    # カレンダーコンポーネント
-│       └── DayTasksModal.jsx  # カレンダー日付クリック時のモーダル
-└── package.json
-```
-
-## セットアップ
+## ローカルで起動
 
 ```bash
-cd task-manager
 npm install
 npm start
 ```
 
-ブラウザで `http://localhost:3000` を開いてください。
+`http://localhost:3000/task-manager` を開きます。
+
+## GitHub Pagesで公開
+
+このプロジェクトは次のURL向けに設定されています。
+
+`https://koba220.github.io/task-manager`
+
+GitHubで `koba220/task-manager` リポジトリを作成し、このフォルダの中身を `main` ブランチへアップロードします。その後、ローカルで次を実行します。
+
+```bash
+npm install
+npm run deploy
+```
+
+`gh-pages` ブランチが作成されます。GitHubのリポジトリで **Settings → Pages** を開き、公開元が `gh-pages` ブランチになっていることを確認してください。
+
+別のGitHubユーザー名やリポジトリ名を使う場合は、`package.json` の `homepage` を実際の公開URLへ変更してからデプロイしてください。
+

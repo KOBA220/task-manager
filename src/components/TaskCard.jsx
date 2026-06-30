@@ -1,5 +1,5 @@
 import React from 'react';
-import { formatDate, isOverdue, isDueSoon, PRIORITIES, PRIORITY_COLORS } from '../utils/helpers';
+import { formatDateTime, getTaskEnd, getTaskStatus, projectColor, STATUS_META, PRIORITIES, PRIORITY_COLORS } from '../utils/helpers';
 
 const styles = {
   card: {
@@ -17,10 +17,14 @@ const styles = {
   },
 };
 
-export default function TaskCard({ task, onEdit, onToggleComplete, onDelete, isSelected, onSelect }) {
-  const overdue = !task.completed && isOverdue(task.dueDate);
-  const soon = !task.completed && !overdue && isDueSoon(task.dueDate);
-  const pc = PRIORITY_COLORS[task.priority];
+export default function TaskCard({ task, onEdit, onToggleComplete, onDelete, isSelected, onSelect, selectable = true }) {
+  const status = getTaskStatus(task);
+  const overdue = status === 'overdue';
+  const soon = status === 'upcoming';
+  const statusMeta = STATUS_META[status];
+  const pc = PRIORITY_COLORS[task.priority] || PRIORITY_COLORS.none;
+  const project = task.project || '未分類';
+  const endAt = getTaskEnd(task);
   const notesDone = (task.notes || []).filter((n) => (task.checkedNoteIds || []).includes(n.id)).length;
 
   return (
@@ -34,17 +38,20 @@ export default function TaskCard({ task, onEdit, onToggleComplete, onDelete, isS
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.boxShadow = 'none'; }}
     >
       {/* Checkbox */}
-      <input
+      {selectable && <input
         type="checkbox"
         checked={isSelected}
         onChange={() => onSelect(task.id)}
         style={{ marginTop: 2, width: 15, minWidth: 15, accentColor: 'var(--accent)', cursor: 'pointer' }}
         onClick={(e) => e.stopPropagation()}
-      />
+      />}
 
       {/* Body */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99, color: projectColor(project), background: `${projectColor(project)}14` }}>
+            {project}
+          </span>
           <span style={{
             fontWeight: 600, fontSize: 14,
             textDecoration: task.completed ? 'line-through' : 'none',
@@ -58,16 +65,19 @@ export default function TaskCard({ task, onEdit, onToggleComplete, onDelete, isS
           }}>
             {PRIORITIES[task.priority]}
           </span>
-          {task.dueDate && (
+          <span style={{ fontSize: 10, fontWeight: 600, color: statusMeta.color, display: 'flex', alignItems: 'center', gap: 3 }}>
+            <i className={`ti ${statusMeta.icon}`} /> {statusMeta.label}
+          </span>
+          {(task.startAt || endAt) && (
             <span style={{
               fontSize: 11,
               color: overdue ? 'var(--danger)' : soon ? 'var(--warn)' : 'var(--text3)',
               display: 'flex', alignItems: 'center', gap: 3,
             }}>
-              <i className="ti ti-calendar" style={{ fontSize: 12 }} />
-              {formatDate(task.dueDate)}
-              {overdue && ' · 期限切れ'}
-              {soon && ' · もうすぐ'}
+              <i className="ti ti-calendar-time" style={{ fontSize: 12 }} />
+              {task.startAt ? formatDateTime(task.startAt) : '開始未設定'}
+              {' → '}
+              {endAt ? formatDateTime(endAt) : '終了未設定'}
             </span>
           )}
         </div>

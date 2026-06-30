@@ -1,5 +1,5 @@
 import React from 'react';
-import { PRIORITIES, PRIORITY_COLORS } from '../utils/helpers';
+import { formatDateTime, getTaskEnd, projectColor, PRIORITIES, PRIORITY_COLORS } from '../utils/helpers';
 
 export default function DayTasksModal({ tasks, dateStr, onClose }) {
   const label = new Date(dateStr).toLocaleDateString('ja-JP', { month: 'long', day: 'numeric' });
@@ -26,8 +26,14 @@ export default function DayTasksModal({ tasks, dateStr, onClose }) {
         {tasks.map((t) => {
           const pc = PRIORITY_COLORS[t.priority];
           return (
-            <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--border)', gap: 10 }}>
-              <span style={{ fontSize: 13 }}>{t.title}</span>
+            <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '10px 0', borderBottom: '1px solid var(--border)', gap: 10 }}>
+              <div style={{ minWidth: 0 }}>
+                <span style={{ display: 'block', fontSize: 10, fontWeight: 700, color: projectColor(t.project || '未分類'), marginBottom: 3 }}>{t.project || '未分類'}</span>
+                <span style={{ display: 'block', fontSize: 13, textDecoration: t.completed ? 'line-through' : 'none' }}>{t.title}</span>
+                <span style={{ display: 'block', fontSize: 10, color: 'var(--text3)', marginTop: 3 }}>
+                  {t.startAt ? formatDateTime(t.startAt) : '開始未設定'} → {getTaskEnd(t) ? formatDateTime(getTaskEnd(t)) : '終了未設定'}
+                </span>
+              </div>
               <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 99, background: pc.bg, color: pc.color, border: `1px solid ${pc.border}`, whiteSpace: 'nowrap' }}>
                 {PRIORITIES[t.priority]}
               </span>
