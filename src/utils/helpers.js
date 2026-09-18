@@ -36,10 +36,23 @@ export const STATUS_META = {
   upcoming: { label: 'これから', color: '#2563EB', icon: 'ti-calendar-time' },
 };
 
-export const projectColor = (project = '未分類') => {
-  const palette = ['#4A3F8F', '#2563EB', '#2E7D4F', '#B06B10', '#C13B3B', '#7C3AED', '#0F766E'];
+export const PROJECT_COLORS = [
+  '#4F46E5', '#DC2626', '#059669', '#D97706', '#2563EB', '#9333EA',
+  '#0891B2', '#DB2777', '#65A30D', '#EA580C', '#7C3AED', '#0F766E',
+];
+
+export const createProjectColorMap = (projects = []) =>
+  [...new Set(projects.map((project) => project || '未分類'))]
+    .sort((a, b) => a.localeCompare(b, 'ja'))
+    .reduce((map, project, index) => {
+      map[project] = PROJECT_COLORS[index % PROJECT_COLORS.length];
+      return map;
+    }, {});
+
+export const projectColor = (project = '未分類', colorMap) => {
+  if (colorMap?.[project]) return colorMap[project];
   const hash = [...project].reduce((sum, char) => sum + char.charCodeAt(0), 0);
-  return palette[hash % palette.length];
+  return PROJECT_COLORS[hash % PROJECT_COLORS.length];
 };
 
 export const PRIORITIES = { high: '高', medium: '中', low: '低', none: 'なし' };

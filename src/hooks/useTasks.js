@@ -7,10 +7,12 @@ const load = () => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     const tasks = raw ? JSON.parse(raw) : initialTasks;
-    // Existing records did not have parentId. Treat them as root tasks.
-    return Array.isArray(tasks) ? tasks.map((task) => ({ ...task, parentId: task.parentId || null })) : initialTasks;
+    // parentId がない旧データはルートタスクとして扱い、既存データをそのまま引き継ぐ。
+    return Array.isArray(tasks)
+      ? tasks.map((task) => ({ ...task, parentId: task.parentId || null }))
+      : initialTasks.map((task) => ({ ...task, parentId: null }));
   } catch {
-    return initialTasks;
+    return initialTasks.map((task) => ({ ...task, parentId: null }));
   }
 };
 
@@ -39,18 +41,18 @@ export function useTasks() {
 
   const deleteTask = useCallback((id) => {
     setTasks((prev) => {
-      const ids = new Set([id]);
-      let changed = true;
-      while (changed) {
-        changed = false;
+      const deletedIds = new Set([id]);
+      let foundDescendant = true;
+      while (foundDescendant) {
+        foundDescendant = false;
         prev.forEach((task) => {
-          if (task.parentId && ids.has(task.parentId) && !ids.has(task.id)) {
-            ids.add(task.id);
-            changed = true;
+          if (task.parentId && deletedIds.has(task.parentId) && !deletedIds.has(task.id)) {
+            deletedIds.add(task.id);
+            foundDescendant = true;
           }
         });
       }
-      return prev.filter((task) => !ids.has(task.id));
+      return prev.filter((task) => !deletedIds.has(task.id));
     });
   }, [setTasks]);
 

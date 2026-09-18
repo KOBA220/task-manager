@@ -1,15 +1,21 @@
 import React, { useState, useMemo } from 'react';
 import { useTasks } from './hooks/useTasks';
+import { useMeetings } from './hooks/useMeetings';
 import TaskCard from './components/TaskCard';
 import TaskModal from './components/TaskModal';
 import BulkMemoModal from './components/BulkMemoModal';
 import Calendar from './components/Calendar';
 import DayTasksModal from './components/DayTasksModal';
-import { formatDateTime, getTaskEnd, getTaskStatus, STATUS_META, PRIORITY_ORDER, projectColor } from './utils/helpers';
+import ScheduleModal from './components/ScheduleModal';
+import MeetingModal from './components/MeetingModal';
+import MeetingWorkspace from './components/MeetingWorkspace';
+import { createProjectColorMap, formatDateTime, getTaskEnd, getTaskStatus, STATUS_META, PRIORITY_ORDER, projectColor } from './utils/helpers';
 
 export default function App() {
   const { tasks, addTask, updateTask, deleteTask, toggleComplete, bulkMemo, bulkComplete } = useTasks();
+  const { meetings, addMeeting, updateMeeting, deleteMeeting } = useMeetings();
 
+  const [workspace, setWorkspace] = useState('tasks');
   const [tab, setTab] = useState('inProgress');
   const [showModal, setShowModal] = useState(false);
   const [editTask, setEditTask] = useState(null);
@@ -21,6 +27,9 @@ export default function App() {
   const [filterProject, setFilterProject] = useState('all');
   const [search, setSearch] = useState('');
   const [calDay, setCalDay] = useState(null);
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [showMeetingModal, setShowMeetingModal] = useState(false);
+  const [editMeeting, setEditMeeting] = useState(null);
 
   const statusTasks = useMemo(() => ({
     inProgress: tasks.filter((task) => getTaskStatus(task) === 'inProgress'),
@@ -29,7 +38,11 @@ export default function App() {
     upcoming: tasks.filter((task) => getTaskStatus(task) === 'upcoming'),
   }), [tasks]);
 
-  const projects = useMemo(() => [...new Set(tasks.map((task) => task.project || '未分類'))].sort(), [tasks]);
+  const projects = useMemo(() => [...new Set([
+    ...tasks.map((task) => task.project || '未分類'),
+    ...meetings.map((meeting) => meeting.project || '未分類'),
+  ])].sort((a, b) => a.localeCompare(b, 'ja')), [meetings, tasks]);
+  const projectColors = useMemo(() => createProjectColorMap(projects), [projects]);
 
   const filteredTasks = useMemo(() => {
     let list = statusTasks[tab] || [];
@@ -56,7 +69,7 @@ export default function App() {
   }, {}), [filteredTasks]);
 
   const upcomingTasks = tasks
-    .filter((t) => !t.completed && getTaskEnd(t))
+    .filter((t) => getTaskStatus(t) !== 'completed' && !t.completed && getTaskEnd(t))
     .sort((a, b) => new Date(getTaskEnd(a)) - new Date(getTaskEnd(b)))
     .slice(0, 6);
 
@@ -79,6 +92,72 @@ export default function App() {
   const handleBulkMemo = (memo, append) => { bulkMemo(selectedIds, memo, append); setShowBulkMemo(false); clearSelect(); };
   const handleBulkComplete = () => { bulkComplete(selectedIds); clearSelect(); };
 
+  const handleMeetingSave = (meeting) => {
+    if (meeting.id && meetings.some((item) => item.id === meeting.id)) updateMeeting(meeting);
+    else addMeeting(meeting);
+    setShowMeetingModal(false);
+    setEditMeeting(null);
+  };
+
+  const handleMeetingEdit = (meeting) => {
+    setEditMeeting(meeting);
+    setShowMeetingModal(true);
+  };
+
+  const handleMeetingDelete = (id) => {
+    if (window.confirm('この会議と議事録を削除しますか？')) deleteMeeting(id);
+  };
+
+  const handleConvertAction = (meeting, actionItem) => {
+    const endAt = actionItem.dueDate ? `${actionItem.dueDate}T17:00` : '';
+    addTask({
+      title: actionItem.text,
+      project: meeting.project || '未分類',
+      priority: 'medium',
+      startAt: '',
+      endAt,
+      dueDate: actionItem.dueDate || '',
+      completed: false,
+      memo: `会議「${meeting.title}」の持ち帰り事項${actionItem.assignee ? `\n担当：${actionItem.assignee}` : ''}`,
+      notes: [],
+      checkedNoteIds: [],
+    });
+    updateMeeting({
+      ...meeting,
+      actionItems: meeting.actionItems.map((item) => item.id === actionItem.id ? { ...item, converted: true } : item),
+    });
+  };
+
+  if (workspace === 'meetings') {
+    return (
+      <>
+        <MeetingWorkspace
+          meetings={meetings}
+          projects={projects}
+          projectColors={projectColors}
+          onBackToTasks={() => setWorkspace('tasks')}
+          onShowSchedule={() => setShowSchedule(true)}
+          onAdd={() => { setEditMeeting(null); setShowMeetingModal(true); }}
+          onEdit={handleMeetingEdit}
+          onDelete={handleMeetingDelete}
+          onConvertAction={handleConvertAction}
+        />
+        {showMeetingModal && <MeetingModal meeting={editMeeting} projects={projects} onSave={handleMeetingSave} onClose={() => { setShowMeetingModal(false); setEditMeeting(null); }} />}
+        {showSchedule && (
+          <ScheduleModal
+            tasks={tasks}
+            meetings={meetings}
+            projects={projects}
+            projectColors={projectColors}
+            onClose={() => setShowSchedule(false)}
+            onEditTask={(task) => { setShowSchedule(false); setWorkspace('tasks'); handleEdit(task); }}
+            onEditMeeting={(meeting) => { setShowSchedule(false); handleMeetingEdit(meeting); }}
+          />
+        )}
+      </>
+    );
+  }
+
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
       <div className="app-layout">
@@ -86,16 +165,26 @@ export default function App() {
         {/* ── Main ── */}
         <div>
           {/* Top bar */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
             <div>
               <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em' }}>タスク管理</h1>
               <p style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>
                 {new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
               </p>
             </div>
+            <nav style={{ marginLeft: 8, display: 'flex', padding: 3, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface2)' }}>
+              <button style={{ padding: '7px 14px', border: 'none', borderRadius: 6, background: 'var(--surface)', color: 'var(--accent)', boxShadow: 'var(--shadow-sm)', fontSize: 12, fontWeight: 700 }}><i className="ti ti-list-check" /> タスク</button>
+              <button onClick={() => setWorkspace('meetings')} style={{ padding: '7px 14px', border: 'none', borderRadius: 6, background: 'transparent', color: 'var(--text3)', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}><i className="ti ti-users" /> 会議</button>
+            </nav>
+            <button
+              onClick={() => setShowSchedule(true)}
+              style={{ marginLeft: 'auto', padding: '9px 14px', background: 'var(--surface)', color: 'var(--accent)', border: '1px solid var(--accent-mid)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              <i className="ti ti-chart-gantt" /> 全体スケジュール
+            </button>
             <button
               onClick={() => { setEditTask(null); setParentTask(null); setShowModal(true); }}
-              style={{ marginLeft: 'auto', padding: '9px 18px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, transition: 'background 0.15s' }}
+              style={{ padding: '9px 18px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, transition: 'background 0.15s' }}
               onMouseEnter={(e) => (e.currentTarget.style.background = '#3A2F7E')}
               onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--accent)')}
             >
@@ -172,26 +261,32 @@ export default function App() {
               {filteredTasks.length === 0 ? (
                 <EmptyState icon="ti-check" text={search ? '検索結果がありません' : 'タスクがありません'} />
               ) : (
-                Object.entries(groupedTasks).map(([project, projectTasks]) => (
-                  <section key={project} style={{ marginBottom: 20 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '12px 2px 8px' }}>
-                      <span style={{ width: 9, height: 9, borderRadius: '50%', background: projectColor(project) }} />
-                      <h2 style={{ fontSize: 14, fontWeight: 700 }}>{project}</h2>
-                      <span style={{ fontSize: 11, color: 'var(--text3)' }}>{projectTasks.length}件</span>
-                    </div>
-                    <TaskTree
-                      tasks={projectTasks}
-                      allTasks={tasks}
-                      onAddChild={handleAddChild}
-                      onEdit={handleEdit}
-                      onToggleComplete={toggleComplete}
-                      onDelete={deleteTask}
-                      selectedIds={selectedIds}
-                      selectable={tab !== 'completed'}
-                      onSelect={tab === 'completed' ? () => {} : handleSelect}
-                    />
-                  </section>
-                ))
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14, alignItems: 'start' }}>
+                  {Object.entries(groupedTasks).map(([project, projectTasks]) => {
+                    const color = projectColor(project, projectColors);
+                    return (
+                      <section key={project} style={{ minWidth: 0, padding: 11, border: '1px solid var(--border)', borderTop: `4px solid ${color}`, borderRadius: 'var(--radius-md)', background: 'var(--surface2)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 3px 10px' }}>
+                          <span style={{ width: 10, height: 10, borderRadius: 3, background: color }} />
+                          <h2 style={{ fontSize: 14, fontWeight: 750 }}>{project}</h2>
+                          <span style={{ marginLeft: 'auto', padding: '2px 7px', borderRadius: 99, background: `${color}18`, color, fontSize: 10, fontWeight: 700 }}>{projectTasks.length}件</span>
+                        </div>
+                        <TaskTree
+                          tasks={projectTasks}
+                          allTasks={tasks}
+                          projectColors={projectColors}
+                          onAddChild={handleAddChild}
+                          onEdit={handleEdit}
+                          onToggleComplete={toggleComplete}
+                          onDelete={deleteTask}
+                          selectedIds={selectedIds}
+                          selectable={tab !== 'completed'}
+                          onSelect={tab === 'completed' ? () => {} : handleSelect}
+                        />
+                      </section>
+                    );
+                  })}
+                </div>
               )}
           </>
         </div>
@@ -200,7 +295,7 @@ export default function App() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* Calendar */}
           <SideCard title="スケジュール" icon="ti-calendar">
-            <Calendar tasks={tasks} onDayClick={(t, d) => setCalDay({ tasks: t, dateStr: d })} />
+            <Calendar tasks={tasks} projectColors={projectColors} onDayClick={(t, d) => setCalDay({ tasks: t, dateStr: d })} />
           </SideCard>
 
           {/* Upcoming */}
@@ -211,7 +306,7 @@ export default function App() {
               upcomingTasks.map((t) => (
                 <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--border)', gap: 8 }}>
                   <div style={{ minWidth: 0, flex: 1 }}>
-                    <span style={{ display: 'block', fontSize: 10, color: projectColor(t.project || '未分類'), fontWeight: 700 }}>{t.project || '未分類'}</span>
+                    <span style={{ display: 'block', fontSize: 10, color: projectColor(t.project || '未分類', projectColors), fontWeight: 700 }}>{t.project || '未分類'}</span>
                     <span style={{ display: 'block', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
                   </div>
                   <span style={{ fontSize: 10, whiteSpace: 'nowrap', color: getTaskStatus(t) === 'overdue' ? 'var(--danger)' : 'var(--text3)' }}>
@@ -225,17 +320,28 @@ export default function App() {
       </div>
 
       {/* Modals */}
-      {showModal && <TaskModal task={editTask || (parentTask ? { parentId: parentTask.id, project: parentTask.project || '', priority: 'none', title: '', startAt: '', endAt: '', dueDate: '', memo: '', notes: [], checkedNoteIds: [] } : null)} projects={projects} onSave={handleSave} onClose={() => { setShowModal(false); setEditTask(null); setParentTask(null); }} />}
+      {showModal && <TaskModal task={editTask || (parentTask ? { parentId: parentTask.id, project: parentTask.project || '', priority: 'none', title: '', startAt: '', endAt: '', dueDate: '', allDay: false, memo: '', notes: [], checkedNoteIds: [] } : null)} projects={projects} onSave={handleSave} onClose={() => { setShowModal(false); setEditTask(null); setParentTask(null); }} />}
       {showBulkMemo && <BulkMemoModal count={selectedIds.length} onSave={handleBulkMemo} onClose={() => setShowBulkMemo(false)} />}
-      {calDay && <DayTasksModal tasks={calDay.tasks} dateStr={calDay.dateStr} onClose={() => setCalDay(null)} />}
+      {calDay && <DayTasksModal tasks={calDay.tasks} dateStr={calDay.dateStr} projectColors={projectColors} onClose={() => setCalDay(null)} />}
+      {showSchedule && (
+        <ScheduleModal
+          tasks={tasks}
+          meetings={meetings}
+          projects={projects}
+          projectColors={projectColors}
+          onClose={() => setShowSchedule(false)}
+          onEditTask={(task) => { setShowSchedule(false); handleEdit(task); }}
+          onEditMeeting={(meeting) => { setShowSchedule(false); setWorkspace('meetings'); handleMeetingEdit(meeting); }}
+        />
+      )}
     </div>
   );
 }
 
-function TaskTree({ tasks, allTasks, ...props }) {
+function TaskTree({ tasks, allTasks, selectedIds, ...props }) {
   const visibleIds = new Set(tasks.map((task) => task.id));
-  const taskIds = new Set(allTasks.map((task) => task.id));
-  const roots = tasks.filter((task) => !task.parentId || !visibleIds.has(task.parentId) || !taskIds.has(task.parentId));
+  const allIds = new Set(allTasks.map((task) => task.id));
+  const roots = tasks.filter((task) => !task.parentId || !visibleIds.has(task.parentId) || !allIds.has(task.parentId));
 
   const getDepth = (task) => {
     let depth = 0;
@@ -253,19 +359,14 @@ function TaskTree({ tasks, allTasks, ...props }) {
 
   const renderTask = (task, depth = getDepth(task)) => (
     <React.Fragment key={task.id}>
-      <TaskCard
-        task={task}
-        depth={depth}
-        {...props}
-        isSelected={props.selectedIds.includes(task.id)}
-      />
+      <TaskCard task={task} depth={depth} {...props} isSelected={selectedIds.includes(task.id)} />
       {depth < 2 && tasks
         .filter((child) => child.parentId === task.id)
         .map((child) => renderTask(child, depth + 1))}
     </React.Fragment>
   );
 
-  return roots.map((task) => renderTask(task));
+  return <div>{roots.map((task) => renderTask(task))}</div>;
 }
 
 function SideCard({ title, icon, children }) {
