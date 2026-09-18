@@ -17,7 +17,7 @@ const styles = {
   },
 };
 
-export default function TaskCard({ task, onEdit, onToggleComplete, onDelete, isSelected, onSelect, selectable = true }) {
+export default function TaskCard({ task, depth = 0, onAddChild, onEdit, onToggleComplete, onDelete, isSelected, onSelect, selectable = true }) {
   const status = getTaskStatus(task);
   const overdue = status === 'overdue';
   const soon = status === 'upcoming';
@@ -31,6 +31,7 @@ export default function TaskCard({ task, onEdit, onToggleComplete, onDelete, isS
     <div
       style={{
         ...styles.card,
+        marginLeft: depth * 28,
         borderLeft: overdue ? '3px solid var(--danger)' : soon ? '3px solid var(--warn)' : undefined,
         opacity: task.completed ? 0.6 : 1,
       }}
@@ -98,6 +99,7 @@ export default function TaskCard({ task, onEdit, onToggleComplete, onDelete, isS
 
       {/* Actions */}
       <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+        {depth < 2 && <ActionBtn title={depth === 0 ? '子タスクを追加' : '孫タスクを追加'} icon="ti-plus" onClick={() => onAddChild(task)} />}
         <ActionBtn title="編集" icon="ti-edit" onClick={() => onEdit(task)} />
         <ActionBtn
           title={task.completed ? '未完了に戻す' : '完了にする'}

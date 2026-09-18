@@ -13,6 +13,7 @@ export default function App() {
   const [tab, setTab] = useState('inProgress');
   const [showModal, setShowModal] = useState(false);
   const [editTask, setEditTask] = useState(null);
+  const [parentTask, setParentTask] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
   const [showBulkMemo, setShowBulkMemo] = useState(false);
   const [sortBy, setSortBy] = useState('created');
@@ -62,10 +63,15 @@ export default function App() {
   const handleSave = (task) => {
     if (task.id && tasks.find((t) => t.id === task.id)) updateTask(task);
     else addTask(task);
-    setShowModal(false); setEditTask(null);
+    setShowModal(false); setEditTask(null); setParentTask(null);
   };
 
-  const handleEdit = (task) => { setEditTask(task); setShowModal(true); };
+  const handleEdit = (task) => { setParentTask(null); setEditTask(task); setShowModal(true); };
+  const handleAddChild = (task) => {
+    setEditTask(null);
+    setParentTask(task);
+    setShowModal(true);
+  };
   const handleSelect = (id) => setSelectedIds((prev) => prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]);
   const selectAll = () => setSelectedIds(filteredTasks.map((t) => t.id));
   const clearSelect = () => setSelectedIds([]);
@@ -88,7 +94,7 @@ export default function App() {
               </p>
             </div>
             <button
-              onClick={() => { setEditTask(null); setShowModal(true); }}
+              onClick={() => { setEditTask(null); setParentTask(null); setShowModal(true); }}
               style={{ marginLeft: 'auto', padding: '9px 18px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, transition: 'background 0.15s' }}
               onMouseEnter={(e) => (e.currentTarget.style.background = '#3A2F7E')}
               onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--accent)')}
@@ -173,18 +179,17 @@ export default function App() {
                       <h2 style={{ fontSize: 14, fontWeight: 700 }}>{project}</h2>
                       <span style={{ fontSize: 11, color: 'var(--text3)' }}>{projectTasks.length}件</span>
                     </div>
-                    {projectTasks.map((task) => (
-                      <TaskCard
-                        key={task.id}
-                        task={task}
-                        onEdit={handleEdit}
-                        onToggleComplete={toggleComplete}
-                        onDelete={deleteTask}
-                        isSelected={selectedIds.includes(task.id)}
-                        selectable={tab !== 'completed'}
-                        onSelect={tab === 'completed' ? () => {} : handleSelect}
-                      />
-                    ))}
+                    <TaskTree
+                      tasks={projectTasks}
+                      allTasks={tasks}
+                      onAddChild={handleAddChild}
+                      onEdit={handleEdit}
+                      onToggleComplete={toggleComplete}
+                      onDelete={deleteTask}
+                      selectedIds={selectedIds}
+                      selectable={tab !== 'completed'}
+                      onSelect={tab === 'completed' ? () => {} : handleSelect}
+                    />
                   </section>
                 ))
               )}
@@ -220,11 +225,47 @@ export default function App() {
       </div>
 
       {/* Modals */}
-      {showModal && <TaskModal task={editTask} projects={projects} onSave={handleSave} onClose={() => { setShowModal(false); setEditTask(null); }} />}
+      {showModal && <TaskModal task={editTask || (parentTask ? { parentId: parentTask.id, project: parentTask.project || '', priority: 'none', title: '', startAt: '', endAt: '', dueDate: '', memo: '', notes: [], checkedNoteIds: [] } : null)} projects={projects} onSave={handleSave} onClose={() => { setShowModal(false); setEditTask(null); setParentTask(null); }} />}
       {showBulkMemo && <BulkMemoModal count={selectedIds.length} onSave={handleBulkMemo} onClose={() => setShowBulkMemo(false)} />}
       {calDay && <DayTasksModal tasks={calDay.tasks} dateStr={calDay.dateStr} onClose={() => setCalDay(null)} />}
     </div>
   );
+}
+
+function TaskTree({ tasks, allTasks, ...props }) {
+  const visibleIds = new Set(tasks.map((task) => task.id));
+  const taskIds = new Set(allTasks.map((task) => task.id));
+  const roots = tasks.filter((task) => !task.parentId || !visibleIds.has(task.parentId) || !taskIds.has(task.parentId));
+
+  const getDepth = (task) => {
+    let depth = 0;
+    let current = task;
+    const visited = new Set([task.id]);
+    while (current.parentId && depth < 2) {
+      const parent = allTasks.find((item) => item.id === current.parentId);
+      if (!parent || visited.has(parent.id)) break;
+      visited.add(parent.id);
+      current = parent;
+      depth += 1;
+    }
+    return depth;
+  };
+
+  const renderTask = (task, depth = getDepth(task)) => (
+    <React.Fragment key={task.id}>
+      <TaskCard
+        task={task}
+        depth={depth}
+        {...props}
+        isSelected={props.selectedIds.includes(task.id)}
+      />
+      {depth < 2 && tasks
+        .filter((child) => child.parentId === task.id)
+        .map((child) => renderTask(child, depth + 1))}
+    </React.Fragment>
+  );
+
+  return roots.map((task) => renderTask(task));
 }
 
 function SideCard({ title, icon, children }) {
