@@ -1,5 +1,5 @@
 import React from 'react';
-import { formatDateTime, getTaskEnd, getTaskStatus, projectColor, STATUS_META, PRIORITIES, PRIORITY_COLORS } from '../utils/helpers';
+import { formatDate, formatDateTime, getTaskEnd, getTaskStatus, projectColor, STATUS_META, PRIORITIES, PRIORITY_COLORS } from '../utils/helpers';
 
 const styles = {
   card: {
@@ -17,13 +17,14 @@ const styles = {
   },
 };
 
-export default function TaskCard({ task, depth = 0, onAddChild, onEdit, onToggleComplete, onDelete, isSelected, onSelect, selectable = true }) {
+export default function TaskCard({ task, depth = 0, projectColors, onAddChild, onEdit, onToggleComplete, onDelete, isSelected, onSelect, selectable = true }) {
   const status = getTaskStatus(task);
   const overdue = status === 'overdue';
   const soon = status === 'upcoming';
   const statusMeta = STATUS_META[status];
   const pc = PRIORITY_COLORS[task.priority] || PRIORITY_COLORS.none;
   const project = task.project || '未分類';
+  const projectAccent = projectColor(project, projectColors);
   const endAt = getTaskEnd(task);
   const notesDone = (task.notes || []).filter((n) => (task.checkedNoteIds || []).includes(n.id)).length;
 
@@ -31,10 +32,15 @@ export default function TaskCard({ task, depth = 0, onAddChild, onEdit, onToggle
     <div
       style={{
         ...styles.card,
-        marginLeft: depth * 28,
+        marginLeft: depth * 24,
         borderLeft: overdue ? '3px solid var(--danger)' : soon ? '3px solid var(--warn)' : undefined,
         opacity: task.completed ? 0.6 : 1,
+        cursor: 'pointer',
       }}
+      role="button"
+      tabIndex={0}
+      onClick={() => onEdit(task)}
+      onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onEdit(task); } }}
       onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--border2)'; e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; }}
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.boxShadow = 'none'; }}
     >
@@ -50,7 +56,7 @@ export default function TaskCard({ task, depth = 0, onAddChild, onEdit, onToggle
       {/* Body */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99, color: projectColor(project), background: `${projectColor(project)}14` }}>
+          <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99, color: projectAccent, background: `${projectAccent}14`, border: `1px solid ${projectAccent}40` }}>
             {project}
           </span>
           <span style={{
@@ -76,9 +82,19 @@ export default function TaskCard({ task, depth = 0, onAddChild, onEdit, onToggle
               display: 'flex', alignItems: 'center', gap: 3,
             }}>
               <i className="ti ti-calendar-time" style={{ fontSize: 12 }} />
-              {task.startAt ? formatDateTime(task.startAt) : '開始未設定'}
-              {' → '}
-              {endAt ? formatDateTime(endAt) : '終了未設定'}
+              {task.allDay ? (
+                <>
+                  {task.startAt ? formatDate(task.startAt) : '開始未設定'}
+                  {endAt && (!task.startAt || task.startAt.slice(0, 10) !== endAt.slice(0, 10)) ? ` → ${formatDate(endAt)}` : ''}
+                  {' · 終日'}
+                </>
+              ) : (
+                <>
+                  {task.startAt ? formatDateTime(task.startAt) : '開始未設定'}
+                  {' → '}
+                  {endAt ? formatDateTime(endAt) : '終了未設定'}
+                </>
+              )}
             </span>
           )}
         </div>
@@ -117,7 +133,7 @@ function ActionBtn({ title, icon, onClick, color }) {
   return (
     <button
       title={title}
-      onClick={onClick}
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
       style={{
         padding: '5px 7px', borderRadius: 'var(--radius-sm)',
         background: 'none', border: '1px solid var(--border)',

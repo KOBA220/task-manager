@@ -1,7 +1,7 @@
 import React from 'react';
 import { formatDateTime, getTaskEnd, projectColor, PRIORITIES, PRIORITY_COLORS } from '../utils/helpers';
 
-export default function DayTasksModal({ tasks, dateStr, onClose }) {
+export default function DayTasksModal({ tasks, dateStr, projectColors, onClose }) {
   const label = new Date(dateStr).toLocaleDateString('ja-JP', { month: 'long', day: 'numeric' });
   return (
     <div
@@ -28,7 +28,7 @@ export default function DayTasksModal({ tasks, dateStr, onClose }) {
           return (
             <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '10px 0', borderBottom: '1px solid var(--border)', gap: 10 }}>
               <div style={{ minWidth: 0 }}>
-                <span style={{ display: 'block', fontSize: 10, fontWeight: 700, color: projectColor(t.project || '未分類'), marginBottom: 3 }}>{t.project || '未分類'}</span>
+                <span style={{ display: 'block', fontSize: 10, fontWeight: 700, color: projectColor(t.project || '未分類', projectColors), marginBottom: 3 }}>{t.project || '未分類'}</span>
                 <span style={{ display: 'block', fontSize: 13, textDecoration: t.completed ? 'line-through' : 'none' }}>{t.title}</span>
                 <span style={{ display: 'block', fontSize: 10, color: 'var(--text3)', marginTop: 3 }}>
                   {t.startAt ? formatDateTime(t.startAt) : '開始未設定'} → {getTaskEnd(t) ? formatDateTime(getTaskEnd(t)) : '終了未設定'}

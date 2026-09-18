@@ -8,7 +8,7 @@ const inputStyle = {
 };
 const labelStyle = { fontSize: 11, fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5, display: 'block' };
 
-const draftKey = (task) => `task-manager-meeting-draft-${task?.id || `new-${task?.parentId || 'root'}`}`;
+const draftKey = (task) => `task-manager-task-draft-${task?.id || `new-${task?.parentId || 'root'}`}`;
 
 const loadDraft = (task, initial) => {
   try {
@@ -22,7 +22,7 @@ const loadDraft = (task, initial) => {
 export default function TaskModal({ task, projects = [], onSave, onClose }) {
   const [form, setForm] = useState(() => {
     const initial = task || {
-      title: '', project: '', priority: 'none', startAt: '', endAt: '', dueDate: '', memo: '', notes: [], checkedNoteIds: [], parentId: null,
+      title: '', project: '', priority: 'none', startAt: '', endAt: '', dueDate: '', allDay: false, memo: '', notes: [], checkedNoteIds: [], parentId: null,
     };
     return loadDraft(task, initial);
   });
@@ -53,13 +53,17 @@ export default function TaskModal({ task, projects = [], onSave, onClose }) {
 
   const handleSave = () => {
     if (!form.title.trim()) { titleRef.current?.focus(); return; }
-    if (form.startAt && form.endAt && new Date(form.startAt) > new Date(form.endAt)) {
+    const startAt = form.allDay && form.startAt ? `${form.startAt.slice(0, 10)}T00:00` : form.startAt;
+    const endAt = form.allDay && form.endAt ? `${form.endAt.slice(0, 10)}T23:59` : form.endAt;
+    if (startAt && endAt && new Date(startAt) > new Date(endAt)) {
       setDateError('終了日時は開始日時より後にしてください。');
       return;
     }
-    const dueDate = form.endAt ? form.endAt.slice(0, 10) : (form.dueDate || '');
+    const dueDate = endAt ? endAt.slice(0, 10) : (form.dueDate || '');
     const savedTask = {
       ...form,
+      startAt,
+      endAt,
       project: form.project.trim() || '未分類',
       dueDate,
       id: form.id || generateId(),
@@ -146,26 +150,38 @@ export default function TaskModal({ task, projects = [], onSave, onClose }) {
 
           {/* Schedule */}
           <div style={{ background: 'var(--surface2)', borderRadius: 'var(--radius-md)', padding: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, color: 'var(--text2)', fontSize: 12, fontWeight: 600 }}>
-              <i className="ti ti-calendar-time" /> 実施期間
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text2)', fontSize: 12, fontWeight: 600 }}><i className="ti ti-calendar-time" /> 実施期間</span>
+              <button
+                type="button"
+                onClick={() => setForm((previous) => ({
+                  ...previous,
+                  allDay: !previous.allDay,
+                  startAt: !previous.allDay && previous.startAt ? `${previous.startAt.slice(0, 10)}T00:00` : previous.startAt,
+                  endAt: !previous.allDay && previous.endAt ? `${previous.endAt.slice(0, 10)}T23:59` : previous.endAt,
+                }))}
+                style={{ marginLeft: 'auto', padding: '5px 10px', border: `1px solid ${form.allDay ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 99, background: form.allDay ? 'var(--accent-light)' : 'var(--surface)', color: form.allDay ? 'var(--accent)' : 'var(--text3)', cursor: 'pointer', fontSize: 11, fontWeight: 700 }}
+              >
+                <i className={`ti ${form.allDay ? 'ti-toggle-right' : 'ti-toggle-left'}`} /> 終日
+              </button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
-              <label style={labelStyle}>開始日時</label>
+              <label style={labelStyle}>{form.allDay ? '開始日' : '開始日時'}</label>
               <input
-                type="datetime-local"
-                value={form.startAt || ''}
-                onChange={(e) => { set('startAt', e.target.value); setDateError(''); }}
+                type={form.allDay ? 'date' : 'datetime-local'}
+                value={form.allDay ? (form.startAt || '').slice(0, 10) : (form.startAt || '')}
+                onChange={(e) => { set('startAt', form.allDay && e.target.value ? `${e.target.value}T00:00` : e.target.value); setDateError(''); }}
                 style={inputStyle}
               />
             </div>
             <div>
-              <label style={labelStyle}>終了日時</label>
+              <label style={labelStyle}>{form.allDay ? '終了日' : '終了日時'}</label>
               <input
-                type="datetime-local"
-                min={form.startAt || undefined}
-                value={form.endAt || ''}
-                onChange={(e) => { set('endAt', e.target.value); setDateError(''); }}
+                type={form.allDay ? 'date' : 'datetime-local'}
+                min={form.startAt ? (form.allDay ? form.startAt.slice(0, 10) : form.startAt) : undefined}
+                value={form.allDay ? (form.endAt || '').slice(0, 10) : (form.endAt || '')}
+                onChange={(e) => { set('endAt', form.allDay && e.target.value ? `${e.target.value}T23:59` : e.target.value); setDateError(''); }}
                 style={inputStyle}
               />
             </div>
