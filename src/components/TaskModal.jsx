@@ -8,15 +8,33 @@ const inputStyle = {
 };
 const labelStyle = { fontSize: 11, fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5, display: 'block' };
 
+const draftKey = (task) => `task-manager-meeting-draft-${task?.id || `new-${task?.parentId || 'root'}`}`;
+
+const loadDraft = (task, initial) => {
+  try {
+    const raw = localStorage.getItem(draftKey(task));
+    return raw ? { ...initial, ...JSON.parse(raw) } : initial;
+  } catch {
+    return initial;
+  }
+};
+
 export default function TaskModal({ task, projects = [], onSave, onClose }) {
-  const [form, setForm] = useState(() => task || {
-    title: '', project: '', priority: 'none', startAt: '', endAt: '', dueDate: '', memo: '', notes: [], checkedNoteIds: [],
+  const [form, setForm] = useState(() => {
+    const initial = task || {
+      title: '', project: '', priority: 'none', startAt: '', endAt: '', dueDate: '', memo: '', notes: [], checkedNoteIds: [], parentId: null,
+    };
+    return loadDraft(task, initial);
   });
   const [newNote, setNewNote] = useState('');
   const [dateError, setDateError] = useState('');
   const titleRef = useRef();
 
   useEffect(() => { setTimeout(() => titleRef.current?.focus(), 50); }, []);
+
+  useEffect(() => {
+    try { localStorage.setItem(draftKey(task), JSON.stringify(form)); } catch {}
+  }, [form, task]);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -40,13 +58,15 @@ export default function TaskModal({ task, projects = [], onSave, onClose }) {
       return;
     }
     const dueDate = form.endAt ? form.endAt.slice(0, 10) : (form.dueDate || '');
-    onSave({
+    const savedTask = {
       ...form,
       project: form.project.trim() || '未分類',
       dueDate,
       id: form.id || generateId(),
       completed: form.completed || false,
-    });
+    };
+    try { localStorage.removeItem(draftKey(task)); } catch {}
+    onSave(savedTask);
   };
 
   const handleKey = (e) => { if (e.key === 'Escape') onClose(); };

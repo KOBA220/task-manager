@@ -6,7 +6,9 @@ const STORAGE_KEY = 'task-manager-tasks';
 const load = () => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : initialTasks;
+    const tasks = raw ? JSON.parse(raw) : initialTasks;
+    // Existing records did not have parentId. Treat them as root tasks.
+    return Array.isArray(tasks) ? tasks.map((task) => ({ ...task, parentId: task.parentId || null })) : initialTasks;
   } catch {
     return initialTasks;
   }
@@ -36,7 +38,20 @@ export function useTasks() {
   }, [setTasks]);
 
   const deleteTask = useCallback((id) => {
-    setTasks((prev) => prev.filter((t) => t.id !== id));
+    setTasks((prev) => {
+      const ids = new Set([id]);
+      let changed = true;
+      while (changed) {
+        changed = false;
+        prev.forEach((task) => {
+          if (task.parentId && ids.has(task.parentId) && !ids.has(task.id)) {
+            ids.add(task.id);
+            changed = true;
+          }
+        });
+      }
+      return prev.filter((task) => !ids.has(task.id));
+    });
   }, [setTasks]);
 
   const toggleComplete = useCallback((id) => {
